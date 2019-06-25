@@ -1,9 +1,0 @@
-Three Address Code
-test_fn:
-        x = getparam 1
-        i := 2
-        return x
-main:
-        i := 1
-        param i
-        call test_fn, 1 

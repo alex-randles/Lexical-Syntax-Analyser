@@ -1,0 +1,340 @@
+/*********OPTIONS**************/
+options {
+    JAVA_UNICODE_ESCAPE = true;
+    IGNORE_CASE = true;
+    /*DEBUG_PARSER = true;*/
+} 
+
+/********USER CODE***********/
+
+PARSER_BEGIN(CALParser)
+public class CALParser {
+  public static void main(String args[]) {
+    CALParser parser;
+    if (args.length == 0) {
+      System.out.println("CAL Parser:  Reading from standard input . . .");
+      parser = new CALParser(System.in);
+      } else if (args.length == 1) {
+        System.out.println("CAL Parser:  Reading from file " + args[0] + " . . .");
+      try {
+          parser = new CALParser(new java.io.FileInputStream(args[0]));
+      } catch (java.io.FileNotFoundException e) {
+        System.out.println("CAL Parser:  File " + args[0] + " not found.");
+        return;
+      }
+    } else {
+        System.out.println("CAL Parser:  Usage is one of:");
+        System.out.println("         java CALParser < inputfile");
+        System.out.println("OR");
+        System.out.println("         java CALParser inputfile");
+        return;
+    }
+
+    try {
+      parser.program();
+      System.out.println("CAL Parser: CAL program parsed successfully.");
+    } catch (ParseException e) {
+      System.out.println(e.getMessage());
+      System.out.println("CAL Parser:  Encountered errors during parse.");
+    }
+  }
+}
+  
+PARSER_END(CALParser)
+
+
+
+
+/******* TOKENS *****/
+
+TOKEN_MGR_DECLS :
+{
+    static int commentNesting = 0;
+}
+
+SKIP : /*STRUCTURES AND CHARACTERS TO SCAPE*/
+{
+ " "
+|  "\t"
+|  "\n"
+|  "\r"
+|  "\f"
+}
+
+SKIP : /* NESTED_COMMENTS */
+{
+  "/*" { commentNesting++; } : IN_COMMENT
+}
+  <IN_COMMENT> SKIP :
+{
+  "/*" { commentNesting++; }
+| "*/" { commentNesting--;
+  if (commentNesting == 0)
+    SwitchTo(DEFAULT);
+}
+| <~[]>
+}
+
+SKIP : /* NON NESTED COMMENTS */ 
+{
+  < "//" (~["\n"])* "\n" >
+}
+
+
+TOKEN : /* RESERVED WORDS  */ 
+{
+    <VARIABLE: "variable">
+|   <CONSTANT: "constant">
+|   <RETURN: "return">
+|   <INTEGER: "integer">
+|   <BOOLEAN: "boolean">
+|   <VOID: "void">
+|   <MAIN: "main">
+|   <IF: "if">
+|   <ELSE : "else">
+|   <TRUE: "true">
+|   <SKP: "skip">
+|   <FALSE: "false">
+|   <WHILE: "while">
+|   <BEGIN: "begin">
+|   <END: "end">
+|   <IS: "is">
+
+
+}
+
+TOKEN : /* KEYWORDS AND PUNCTUATION */ 
+{
+    < SEMI_COLON : ";" > 
+|   < COMMA : "," >
+|   < COLON : ":" >
+|   < ASSIGNMENT : ":=" > 
+|   < LBR : "(" >
+|   < RBR : ")" >
+|   < PLUS_SIGN : "+" >
+|   < MINUS_SIGN : "-" > 
+|   < NEGATION : "~" >
+|   < OR : "|" >
+|   < AND : "&" >
+|   < EQUALS : "=" >
+|   < NOT_EQUALS : "!=" >
+|   < LESS_THEN : "<" > 
+|   < GRT_THEN : ">" >
+|   < LESS_EQUAL : "<=" >
+|   < GRT_EQUAL : ">=" >
+
+}
+
+
+
+TOKEN : /* Integers and Identifiers */
+{
+  < INTEGERS : "0" | ((<MINUS_SIGN>)? <NEGATIVE_DIGITS> (<DIGITS>)*)>
+| < #DIGITS : ["0" - "9"] >
+| < #NEGATIVE_DIGITS : ["1" - "9"] > 
+| < IDENTIFIER : <LETTER> (<LETTER> | <DIGITS> | "_")* >
+| < #LETTER : ["a" - "z", "A" - "Z"] >
+}
+
+
+
+TOKEN : /* Not recongnised */ 
+{
+    
+  < OTHER : ~[] >
+
+}
+
+
+/****GRAMMAR********/ 
+
+/*1*/ 
+
+void program() : {}
+{
+    decl_list() function_list() main()
+}
+
+/*2*/ 
+
+void decl_list() : {}
+{
+    [decl() <SEMI_COLON> decl_list()]
+}
+
+/*3*/
+
+void decl() : {}
+{
+  var_decl()
+| const_decl()
+}
+
+/*4*/
+
+void var_decl() : {}
+{
+  (<VARIABLE> <IDENTIFIER> <COLON> type())
+}
+
+/*5*/
+
+void const_decl() : {}
+{
+  (<CONSTANT> <IDENTIFIER><COLON> type() <ASSIGNMENT> expression() )
+}
+
+/*6*/
+
+void function_list() : {}
+{
+  [function() function_list()]
+}
+
+/*7*/
+
+void function() : {}
+{
+  (type() <IDENTIFIER><LBR> parameter_list() <RBR> <IS> decl_list() <BEGIN> statement_block()  <RETURN> <LBR> [expression() ] <RBR> <SEMI_COLON> <END>)
+}
+
+/*8*/
+
+void type() : {}
+{
+    <INTEGER>
+  | <BOOLEAN>
+  | <VOID>
+}
+
+/*9*/
+
+void parameter_list() : {}
+{
+    [nemp_parameter_list()]   
+}
+
+/*10*/
+
+void nemp_parameter_list()  : {}
+{
+  (<IDENTIFIER><COLON> type() nemp_parameter_list_choice())
+}
+
+void nemp_parameter_list_choice()  : {}
+{
+  [<COMMA> nemp_parameter_list() ]
+}
+
+
+
+void main() : {}
+{
+  (<MAIN> <BEGIN> decl_list() statement_block()  <END>)
+}
+
+/*11*/
+
+void statement_block()  : {}
+{
+  statement()  statement_block()
+| {} 
+
+}
+
+/*12*/
+
+void statement()  : {}
+{
+  (<IDENTIFIER> statement_choice())
+| (<BEGIN> statement_block()  <BEGIN>)
+| (<IF> condition() <BEGIN> statement_block()  <END> <ELSE> <BEGIN> statement_block()  <END>)
+| (<WHILE> condition() <BEGIN> statement_block()  <END>)
+| (<SKP> <SEMI_COLON>)
+}
+
+void statement_choice()  : {}
+{
+  <ASSIGNMENT> expression()  <SEMI_COLON>
+| <LBR> arg_list() <RBR> <SEMI_COLON>
+}
+
+/*13*/
+
+void expression()  : {}
+{
+  (fragment() expression_recursion())
+| (<LBR> expression()  <RBR> expression_recursion())
+}
+
+void expression_recursion() : {}
+{
+  binary_arith_op() expression() 
+| {}
+}
+
+/*14*/
+
+void binary_arith_op() : {}
+{
+    <PLUS_SIGN> 
+  | <MINUS_SIGN>
+}
+
+/*15*/
+
+void fragment() : {}
+{
+  (<IDENTIFIER>[<LBR> arg_list() <RBR>])
+| (<MINUS_SIGN> <IDENTIFIER>)
+| <INTEGERS>
+| <TRUE>
+| <FALSE>
+}
+
+/*16*/
+
+void condition() : {}
+{
+  (<NEGATION> condition() condition_recursion())
+| LOOKAHEAD(3) (<LBR> condition() <RBR> condition_recursion())
+| (expression()  comp_op() expression()  condition_recursion())
+}
+
+void condition_recursion() : {}
+{
+  <OR> condition()
+| <AND> condition()
+| {}
+}
+
+/*17*/
+
+void comp_op() : {}
+{
+  <EQUALS>
+| <NOT_EQUALS>
+| <LESS_THEN>
+| <LESS_EQUAL>
+| <GRT_THEN>
+| <GRT_EQUAL>
+}
+
+/*18*/
+
+void arg_list() : {}
+{
+    [nemp_arg_list()]
+}
+
+/*19*/
+
+void nemp_arg_list() : {}
+{
+    <IDENTIFIER>[<COMMA> nemp_arg_list()]
+}
+
+
+
+
+
